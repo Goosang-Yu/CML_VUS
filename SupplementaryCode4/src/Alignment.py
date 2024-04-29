@@ -1,10 +1,14 @@
+# conda 환경: conda activate cs2
+
 import sys, os
 import subprocess
 import pandas as pd
 from glob import glob
+import shutil
+
 
 class ABL1VUS:
-    def __init__(self, sample_id:str, r1, r2, exon:str, out_dir:str):
+    def __init__(self, sample_id:str, r1, r2, exon:str):
         '''CML VUS screening에서 ABL1의 variants counting을 위한 함수
         CRISPResso를 이용한 counting을 하고, 그 output을 이용해 variants list별로 정리된 
         output 파일을 생성한다. '''
@@ -12,6 +16,9 @@ class ABL1VUS:
         self._check_input(exon)
 
         self.info = self._exon_align_info(exon)
+        
+        self.sample_id = sample_id
+        self.exon = exon
 
         self.refseq = self.info['refseq']
         self.center = self.info['center']
@@ -19,19 +26,36 @@ class ABL1VUS:
 
         data    = f'-r1 {r1} -r2 {r2} -n {sample_id}'
         align   = f'-a {self.refseq} -an {exon} -g {self.center} --plot_window_size {self.window}'
-        output  = f'-o {out_dir} --file_prefix {sample_id}'
+        output  = f'--file_prefix {sample_id}'
         fixed   = f'--suppress_plots --suppress_report'
         
-        command = f'CRISPResso {data} {align} {output} {fixed}'
+        self.command = f'CRISPResso {data} {align} {output} {fixed}'
 
-        subprocess.run([command], shell=True, check=True)
+    def run(self, out_dir:str, remove_temp=True):
+
+        save_dir  = f'-o {out_dir}'
+
+        # run CRISPResso
+        subprocess.run([self.command+save_dir], shell=True, check=True)
+
+        # Copy and rename frequency table
+        file_from = f'{out_dir}/CRISPResso_on_{self.sample_id}/{self.sample_id}.{self.exon}.Alleles_frequency_table_around_sgRNA_{self.center}.txt'
+        file_to   = f'{out_dir}/NGS_frequency_table/alignd_{self.sample_id}.txt'
+
+        shutil.copyfile(file_from, file_to) 
+
+        if remove_temp == True:
+            self._remove_temp_files(out_dir)
+
+    def _remove_temp_files(self, out_dir:str):
+        shutil.rmtree(f'{out_dir}/CRISPResso_on_{self.sample_id}')
 
 
 
     def _check_input(self, exon):
-        if exon not in ['exon4', 'exon5', 'exon6', 'exon7', 'exon8', 'exon9']:
+        if exon not in ['exon4', 'exon5', 'exon6', 'exon7', 'exon8', 'exon9', 'invivo_exon4', 'invivo_exon9']:
             raise ValueError('Not available exon input. Exon list: exon4, exon5, exon6, exon7, exon8, exon9')
-        
+    
 
     def _exon_align_info(self, exon):
         # Refseq을 인식해서 center sequence를 자동으로 만들고, 그 주위로 window 길이도 정해주게 만들 수 있을듯. 
@@ -44,6 +68,16 @@ class ABL1VUS:
                 'refseq': 'ttgagcttgcctgtctctgtgggctgaaggctgttccctgtttccttcagctctacgtctcctccgagagccgcttcaacaccctggccgagttggttcatcatcattcaacggtggccgacgggctcatcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggacatcaccatgaagcacaagctgggcgggggccagtacggggaggtgtacgagggcgtgtggaagaaatacagcctgacggtggccgtgaagaccttgaaggtaggctgggactgccgggggtgcccagggtacgtggggcaag',
                 'center': 'aagcccactgtctatggtgt',
                 'window': 163,
+            },
+            'exon4_150PE_1': {
+                'refseq': 'ttgagcttgcctgtctctgtgggctgaaggctgttccctgtttccttcagctctacgtctcctccgagagccgcttcaacaccctggccgagttggttcatcatcattcaacggtggccgacgggctcatcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggac',
+                'center': 'ttcatcatcattcaacggtg',
+                'window': 92,
+            },
+            'exon4_150PE_2': {
+                'refseq': 'catcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggacatcaccatgaagcacaagctgggcgggggccagtacggggaggtgtacgagggcgtgtggaagaaatacagcctgacggtggccgtgaagaccttgaaggtaggctgggactgccgggggtgcccagggtacgtggggcaag',
+                'center': 'catgaagcacaagctgggcg',
+                'window': 119,
             },
             'exon5': {
                 'refseq': 'gcgctgaagctccattttgcattaactagtcaagtacttacccactgaaaagcacttcctgaaataatttcaccttcgtttttttccttctgcaggaggacaccatggaggtggaagagttcttgaaagaagctgcagtcatgaaagagatcaaacaccctaacctggtgcagctccttggtgagtaagcccggggctctgaagagagggtctcgc',
@@ -70,65 +104,17 @@ class ABL1VUS:
                 'center': 'ccctctgaccggccctcctt',
                 'window': 68,
             },
+            'invivo_exon4': {
+                'refseq': 'catcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggacatcaccatgaagcacaagctgggcgggggccagtacggggaggtgtacgagggcgtgtggaagaaatacagcctgacggtggccgtgaagaccttgaaggtaggctgggactgccgggggtgcccagggtacgtggggcaag',
+                'center': 'catgaagcacaagctgggcg',
+                'window': 119,
+            },
+            'invivo_exon9': {
+                'refseq': 'agccccgtattgctagccagatctcatggatgatctgacttgggtttcatctgtccaggttggcagtggaatccctctgaccggccctcctttgctgaaatccaccaagcctttgaaacaatgttccaggaatccagtatctcagacggtaaagtacccatcccggggtacctgca',
+                'center': 'ccctctgaccggccctcctt',
+                'window': 68,
+            },
         }
 
         return dict_abl1_info[exon]
 
-base_dir = '/extdata2/CML_vus/10_NBT_revision/1_raw_data/X201SC24040832-Z01-F001/01.RawData/'
-
-list_sample = [
-
-                # 'R1_DMSO_PE2_E5',
-                # 'R1_DMSO_PE4_E5',
-                # 'R1_DMSO_PE4K_E5',
-                # 'R1_DMSO_KCL22_PE4K_E5',
-                # 'R1_Ima_PE2_E5',
-                # 'R1_Ima_PE4_E5',
-                # 'R1_Ima_PE4K_E5',
-                # 'R1_Ima_KCL22_PE4K_E5',
-                # 'R1_Nilo_PE2_E5',
-                # 'R1_Nilo_PE4_E5',
-                # 'R1_Nilo_PE4K_E5',
-                # 'R1_Nilo_KCL22_PE4K_E5',
-                # 'R1_Bosu_PE2_E5',
-                # 'R1_Bosu_PE4_E5',
-                # 'R1_Bosu_PE4K_E5',
-                # 'R1_Bosu_KCL22_PE4K_E5',
-                # 'R1_Dasa_PE2_E5',
-                # 'R1_Dasa_PE4_E5',
-                # 'R1_Dasa_PE4K_E5',
-                # 'R1_Dasa_KCL22_PE4K_E5',
-                # 'R1_Pona_PE2_E5',
-                # 'R1_Pona_PE4_E5',
-                # 'R1_Pona_PE4K_E5',
-                # 'R1_Pona_KCL22_PE4K_E5',
-                # 'R1_Asci_PE2_E5',
-                # 'R1_Asci_PE4_E5',
-                # 'R1_Asci_PE4K_E5',
-                # 'R1_Asci_KCL22_PE4K_E5',
-                # 'R1_Ima0_5x_PE4K_E5',
-                # 'R1_Ima2x_PE4K_E5',
-                # 'R1_Asci0_5x_PE4K_E5',
-                # 'R1_Asci2x_PE4K_E5',
-                # 'PE4K_Unedit_E5',
-
-                'R1_DMSO_PE4K_E5_17cycle',
-
-                # 'R1_DMSO_PE4K_E5_20cycle',
-                # 'R1_DMSO_PE4K_E5_23cycle',
-
-
-            ]
-
-
-for sample_id in list_sample:
-    
-    fq_path = f'{base_dir}/{sample_id}'
-    files = list(glob(f'{fq_path}/*.fq.gz'))
-    
-    exon_num = 5
-    
-    r1 = files[0]
-    r2 = files[1]
-
-    abl_e8 = ABL1VUS(sample_id, r1, r2, exon=f'exon{exon_num}', out_dir='./')
