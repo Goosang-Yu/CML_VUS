@@ -26,7 +26,7 @@ def get_class_list(list_var:list, class_file:str, tki:str) -> list:
 
     
 
-def make_invivo_data(sample:str, tki:str, data_dir:str='data/5_LFC', class_file:str='variants_info/variants_class.csv') -> pd.DataFrame:
+def make_invivo_data(sample:str, tki:str, data_dir:str='data/LFC', class_file:str='variants_info/variants_class.csv') -> pd.DataFrame:
     """In vivo data를 classification까지 붙여서 정리한 DataFrame으로 만들어주는 함수.
     여기서 만들어진 DataFrame을 이용해서 joyplot을 그린다. 
 
@@ -59,7 +59,7 @@ def make_invivo_joyplot(data:pd.DataFrame, save_path:str=None, x_range=[-5, 10])
     plt.figure(dpi= 1200)
 
     fig, axes = joypy.joyplot(data, column=['LFC'], by="Class", ylim='own', x_range=x_range, figsize=(4,2.3), 
-                            color=['#003f5c', '#ef5675', '#ffa600'], legend=False, alpha=0.7, overlap=0.4)
+                            color=['#F94040', '#05BE78', '#808080'], legend=False, alpha=0.7, overlap=0.4)
 
     # Decoration
     plt.rc("font", size=10)
