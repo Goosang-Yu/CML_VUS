@@ -6,6 +6,7 @@ SuppleCode1: epegRNA abundance library design
 SuppleCode2: epegRNA abundance screening analysis  
 SuppleCode3: SynPrime library design  
 SuppleCode4: SypPrime screening analysis  
+SuppleCode4: In vivo validation analysis  
 
 # Environments
 본 코드들은 Ubuntu22.04 LTS 또는 CentOS7의 환경에서 테스트 되었다. 
