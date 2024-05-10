@@ -1,0 +1,27 @@
+single_clones_refseq = {
+    'Y253H': {
+        'WT': 'catcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggacatcaccatgaagcacaagctgggcgggggccagtacggggaggtgtacgagggcgtgtggaagaaatacagcctgacggtggccgtgaagaccttgaaggtaggctgggactgccgggggtgcccagggtacgtggggcaa',
+        'Edited': 'catcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggacatcaccatgaagcacaagctgggcgggggccagCacggggaggtgtacgagggcgtgtggaagaaatacagcctgacggtggccgtgaagaccttgaaggtaggctgggactgccgggggtgcccagggtacgtggggcaa',
+        'Intended_only': 'catcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggacatcaccatgaagcacaagctgggcgggggccagCacggggaggtgtacgagggcgtgtggaagaaatacagcctgacggtggccgtgaagaccttgaaggtaggctgggactgccgggggtgcccagggtacgtggggcaa',
+    },
+    'E255V': {
+        'WT': 'catcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggacatcaccatgaagcacaagctgggcgggggccagtacggggaggtgtacgagggcgtgtggaagaaatacagcctgacggtggccgtgaagaccttgaaggtaggctgggactgccgggggtgcccagggtacgtggggcaa',
+        'Edited': 'catcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggacatcaccatgaagcacaagctgggcgggggccagtacggggTggtgtacgagggcgtgtggaagaaatacagcctgacggtggccgtgaagaccttgaaggtaggctgggactgccgggggtgcccagggtacgtggggcaa',
+        'Intended_only': 'catcaccacgctccattatccagccccaaagcgcaacaagcccactgtctatggtgtgtcccccaactacgacaagtgggagatggaacgcacggacatcaccatgaagcacaagctgggcgggggccagtacggggTggtgtacgagggcgtgtggaagaaatacagcctgacggtggccgtgaagaccttgaaggtaggctgggactgccgggggtgcccagggtacgtggggcaa',
+    },
+    'V299L': {
+        'WT': 'GTCAAGTACTTACCCACTGAAAAGCACTTCCTGAAATAATTTCACCTTCGTTTTTTTCCTTCTGCAGGAGGACACCATGGAGGTGGAAGAGTTCTTGAAAGAAGCTGCAGTCATGAAAGAGATCAAACACCCTAACCTGGTGCAGCTCCTTGGTGAGTAAGCCCGGGGCTCTGA',
+        'Edited': 'GTCAAGTACTTACCCACTGAAAAGCACTTCCTGAAATAATTTCACCTTCGTTTTTTTCCTTCTGCAGGAGGACACCATGGAGGTGGAAGAGTTCTTGAAAGAAGCTGCAGTCATGAAAGAGATCAAACACCCTAACCTGCTGCAGCTCCTTGGTGAGTAAGCCCGGGGCTCTGA',
+        'Intended_only': 'GTCAAGTACTTACCCACTGAAAAGCACTTCCTGAAATAATTTCACCTTCGTTTTTTTCCTTCTGCAGGAGGACACCATGGAGGTGGAAGAGTTCTTGAAAGAAGCTGCAGTCATGAAAGAGATCAAACACCCTAACCTGCTGCAGCTCCTTGGTGAGTAAGCCCGGGGCTCTGA',
+    },
+    'E279G': {
+        'WT': 'gtcaagtacttacccactgaaaagcacttcctgaaataatttcaccttcgtttttttccttctgcaggaggacaccatggaggtggaagagttcttgaaagaagctgcagtcatgaaagagatcaaacaccctaacctggtgcagctccttggtgagtaagcccggggctctga',
+        'Edited': 'GTCAAGTACTTACCCACTGAAAAGCACTTCCTGAAATAATTTCACCTTCGTTTTTTTCCTTCTGCAGGAGGACACCATGGGGGTAGAAGAGTTCTTGAAAGAAGCTGCAGTCATGAAAGAGATCAAACACCCTAACCTGGTGCAGCTCCTTGGTGAGTAAGCCCGGGGCTCTGA',
+        'Intended_only': 'GTCAAGTACTTACCCACTGAAAAGCACTTCCTGAAATAATTTCACCTTCGTTTTTTTCCTTCTGCAGGAGGACACCATGGGGGTGGAAGAGTTCTTGAAAGAAGCTGCAGTCATGAAAGAGATCAAACACCCTAACCTGGTGCAGCTCCTTGGTGAGTAAGCCCGGGGCTCTGA',
+    },
+    'E466G': {
+        'WT': 'tcggttttctttcagcatttggagtattgctttgggaaattgctacctatggcatgtccccttacccgggaattgacctgtcccaggtgtatgagctgctagagaaggactaccgcatggagcgcccagaaggctgcccagagaaggtctatgaactcatgcgagcatgtaagccttcctcagcctgttctcacga',
+        'Edited': 'TCGGTTTTCTTTCAGCATTTGGAGTATTGCTTTGGGAAATTGCTACCTATGGCATGTCCCCTTACCCGGGAATTGACCTGTCCCAGGTGTATGAGCTGCTAGAGAAGGACTACCGCATGGAGCGCCCAGAAGGCTGCCCAGGGAAAGTCTATGAACTCATGCGAGCATGTAAGCCTTCCTCAGCCTGTTCTCACGA',
+        'Intended_only': 'TCGGTTTTCTTTCAGCATTTGGAGTATTGCTTTGGGAAATTGCTACCTATGGCATGTCCCCTTACCCGGGAATTGACCTGTCCCAGGTGTATGAGCTGCTAGAGAAGGACTACCGCATGGAGCGCCCAGAAGGCTGCCCAGGGAAGGTCTATGAACTCATGCGAGCATGTAAGCCTTCCTCAGCCTGTTCTCACGA',
+    },
+}

@@ -27,16 +27,19 @@ class ABL1VUS:
         data    = f'-r1 {r1} -r2 {r2} -n {sample_id}'
         align   = f'-a {self.refseq} -an {exon} -g {self.center} --plot_window_size {self.window}'
         output  = f'--file_prefix {sample_id}'
-        fixed   = f'--suppress_plots --suppress_report'
         
-        self.command = f'CRISPResso {data} {align} {output} {fixed}'
+        self.command = f'CRISPResso {data} {align} {output}'
 
-    def run(self, out_dir:str, remove_temp=True):
 
-        save_dir  = f'-o {out_dir}'
+    def run(self, out_dir:str, save_plot:bool=False, remove_temp=True):
 
-        # run CRISPResso
-        subprocess.run([self.command+save_dir], shell=True, check=True)
+        command  = self.command + f'-o {out_dir}'
+
+        if save_plot == False:
+            command = command + f'--suppress_plots --suppress_report'
+
+        # Run CRISPResso
+        subprocess.run([command], shell=True, check=True)
 
         # Copy and rename frequency table
         file_from = f'{out_dir}/CRISPResso_on_{self.sample_id}/{self.sample_id}.{self.exon}.Alleles_frequency_table_around_sgRNA_{self.center}.txt'
