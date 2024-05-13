@@ -1,9 +1,11 @@
 import sys, os
 import pandas as pd
-
+import numpy as np
 from tqdm import tqdm
 from glob import glob
 from scipy.stats import fisher_exact
+from scipy import stats
+from moepy import lowess
 
 def make_count_file(freq_table:str, var_ref:str) -> pd.DataFrame:
     """CRISPResso2를 이용해서 각 variants마다의 read를 alignment 한 파일에서 read count를 가져온다. 
@@ -26,9 +28,6 @@ def make_count_file(freq_table:str, var_ref:str) -> pd.DataFrame:
     for ref_seq in df_ref['RefSeq']:
         dict_out[ref_seq]  = 0
 
-    print(f'\n[Info] Start - {sample_name}')
-    print('[Info] Length of variants:', len(dict_out))
-
     # Step2: read count
     for i in tqdm(df.index, desc=f'[Info] Read counting: {sample_name}'):
         data = df.iloc[i]
@@ -50,11 +49,12 @@ def make_count_file(freq_table:str, var_ref:str) -> pd.DataFrame:
     return df_out
 
 
-def read_statistics(var_sample:str, background:str) -> pd.DataFrame:
+
+def read_statistics(var_control:str, background:str) -> pd.DataFrame:
     """_summary_
 
     Args:
-        var_sample (str): _description_
+        var_control (str): _description_
         background (str): _description_
 
     Raises:
@@ -66,11 +66,11 @@ def read_statistics(var_sample:str, background:str) -> pd.DataFrame:
 
 
     # Load DataFrame
-    df_UE = pd.read_csv(background)
-    df_sample = pd.read_csv(var_sample)
+    df_test = pd.read_csv(var_control)
+    df_UE   = pd.read_csv(background)
 
-    ## Check var_sample과 backgound의 variants list가 완전히 동일한지 확인!
-    if False in list(df_UE['RefSeq'] == df_sample['RefSeq']):
+    ## Check var_control과 backgound의 variants list가 완전히 동일한지 확인!
+    if False in list(df_UE['RefSeq'] == df_test['RefSeq']):
         raise ValueError('Not matched between sample and background. Please check your input files.')
     
     UE_WT_read  = df_UE[df_UE['Label']=='WT_refseq']['count'].iloc[0]
@@ -85,12 +85,12 @@ def read_statistics(var_sample:str, background:str) -> pd.DataFrame:
 
     # Step2: 각 Stat file마다 odds / p-value column 추가하기
 
-    f_name = os.path.basename(var_sample).replace('.csv', '')
+    f_name = os.path.basename(var_control).replace('.csv', '')
     print('Analysis:', f_name)
     
-    df_synpe  = df_sample[df_sample['Label']=='SynPE'].reset_index(drop=True).copy()
+    df_synpe  = df_test[df_test['Label']=='SynPE'].reset_index(drop=True).copy()
 
-    total_cnt_wtseq = df_sample[df_sample['Label']=='WT_refseq']['count'].iloc[0]
+    total_cnt_wtseq = df_test[df_test['Label']=='WT_refseq']['count'].iloc[0]
     total_cnt_edseq = df_synpe['count'].sum()
 
     list_sample_WT  = [] # list_sample_wt_cnt
@@ -131,6 +131,170 @@ def read_statistics(var_sample:str, background:str) -> pd.DataFrame:
     df_synpe['pvalue']          = list_pvalue
 
     return df_synpe
+
+
+class VariantsLFC:
+    def __init__(self, sample:str, chemical:str, ):
+        """mageck test의 input file (mageck count) 형식에 맞춰서 정리된 파일을 만드는 함수.
+        항상 replicate (2개의 실험군)있다는 가정으로 진행 됌 
+
+        Args:
+            sample (str): _description_
+            chemical (str): _description_
+        """        
+
+        self.sample = sample
+        self.chemical = chemical
+        
+
+    def calculate(self, OR_cutoff: float = 2, p_cutoff: float = 0.05, rpm_cutoff:float=10, lws_frac:float=0.15) -> pd.DataFrame:
+        """Odds ratio, fisher's t-test의 p-value를 계산해주고, 이를 기반으로 variants read를 filtering 해준다.
+        그 후, synonymous mutation의 log 2-fold change (LFC)를 이용해서 LOWESS regression을 수행한다.
+        LOWESS regression으로 LFC를 보정해준 normalized LFC를 계산해준 후, 이들의 정보를 담은 DataFrame을 반환한다.
+
+        Args:
+            OR_cutoff (float, optional): _description_. Defaults to 2.
+            p_cutoff (float, optional): _description_. Defaults to 0.05.
+            lws_frac (float, optional): _description_. Defaults to 0.15.
+
+        Returns:
+            pd.DataFrame: _description_
+        """    
+
+        df1_test = pd.read_csv(f'data/read_counts/Count_{self.sample}_Rep1_{self.chemical}.csv')
+        df2_test = pd.read_csv(f'data/read_counts/Count_{self.sample}_Rep2_{self.chemical}.csv')
+        
+        df1_control = pd.read_csv(f'data/statistics/Stat_{self.sample}_Rep1_DMSO.csv')
+        df2_control = pd.read_csv(f'data/statistics/Stat_{self.sample}_Rep2_DMSO.csv')
+
+        # Step1: OR / p-value cutoff를 넘는 sequence 중 R1/R2 에서 공통으로 나오면서 CDS의 변이를 유도하는 것만 골라낸다.
+
+        df1_filtered = df1_control[(df1_control['OR']>OR_cutoff) & (df1_control['pvalue']<p_cutoff) & (df1_control['RPM']>=rpm_cutoff)].copy()
+        df2_filtered = df2_control[(df2_control['OR']>OR_cutoff) & (df2_control['pvalue']<p_cutoff) & (df2_control['RPM']>=rpm_cutoff)].copy()
+
+        # Rep1, Rep2 교집합으로 filtering 통과한 것들만 나오게 함
+        filtered_RefSeq = list(set(df1_filtered['RefSeq']) & set(df2_filtered['RefSeq']))
+
+        df1_filtered = df1_filtered[df1_filtered['RefSeq'].isin(filtered_RefSeq)].copy()
+        df2_filtered = df2_filtered[df2_filtered['RefSeq'].isin(filtered_RefSeq)].copy()
+
+        df1_filtered = df1_filtered[['RefSeq', 'AA_var', 'SNV_var', 'RPM']]
+        df2_filtered = df2_filtered[['RefSeq', 'AA_var', 'SNV_var', 'RPM']]
+
+        df1_filtered.columns = ['RefSeq', 'AA_var', 'SNV_var', 'control']
+        df2_filtered.columns = ['RefSeq', 'AA_var', 'SNV_var', 'control']
+
+
+        # Step2: Cutoff를 통과한 sequence들에 대해서만 read count를 가져오고, mageck count file 형태로 만든다. 
+        df1_test_Syn = df1_test[df1_test['Label']=='SynPE'].copy()
+        df1_test_Syn['RPM'] = df1_test_Syn['count'] * 1000000 / np.sum(df1_test_Syn['count'])
+        df1_test_dict = dict(zip(df1_test_Syn['RefSeq'], df1_test_Syn['RPM']))
+        df1_filtered['test'] = [df1_test_dict.get(i) for i in df1_filtered['RefSeq']]
+        df1_filtered.dropna(axis = 0, inplace=True)
+
+        df2_test_Syn = df2_test[df2_test['Label']=='SynPE'].copy()
+        df2_test_Syn['RPM'] = df2_test_Syn['count'] * 1000000 / np.sum(df2_test_Syn['count'])
+        df2_test_dict = dict(zip(df2_test_Syn['RefSeq'], df2_test_Syn['RPM']))
+        df2_filtered['test'] = [df2_test_dict.get(i) for i in df2_filtered['RefSeq']]
+        df2_filtered.dropna(axis = 0, inplace=True)
+
+
+        # Step3: SNV sum
+        df1_out = self._sum_SNV(df1_filtered)
+        df2_out = self._sum_SNV(df2_filtered)
+
+
+        # Step4: Make LOWESS regression normalized DataFrame
+        df1_out = self._lws_normalized_LFC(df1_out, frac=lws_frac)
+        df2_out = self._lws_normalized_LFC(df2_out, frac=lws_frac)
+
+        return df1_out, df2_out
+    
+
+    def _sum_SNV(self, df:pd.DataFrame):
+
+        df = df[['SNV_var', 'AA_var', 'control', 'test']].copy()
+
+        final_list_aavar = list()
+        final_dict_ctrl  = dict()
+        final_dict_test  = dict()
+
+        for i in range(len(df)):
+            SNV_var = df.iloc[i]['SNV_var']
+            AA_var  = df.iloc[i]['AA_var']
+            ctrl = df.iloc[i]['control']
+            test = df.iloc[i]['test']
+
+            if SNV_var in final_dict_ctrl:
+                final_dict_ctrl[SNV_var] = final_dict_ctrl[SNV_var] + ctrl
+                final_dict_test[SNV_var] = final_dict_test[SNV_var] + test
+            else:
+                final_dict_ctrl[SNV_var] = ctrl
+                final_dict_test[SNV_var] = test
+                final_list_aavar.append(AA_var)
+        
+        ndf = pd.DataFrame({'SNV_var':final_dict_ctrl.keys(), 
+                            'AA_var' : final_list_aavar,
+                            'control': final_dict_ctrl.values(), 
+                            'test'   : final_dict_test.values()})
+        
+        return ndf
+
+
+    def _lws_normalized_LFC(self, df_snv_sum:pd.DataFrame, exclude = None, frac:float=0.15) -> pd.DataFrame:
+        """SNV sum count 파일에서 lowess normalization을 수행한 결과를 넣은 것
+
+        Args:
+            df_snv_sum (pd.DataFrame): _description_
+            exclude (_type_, optional): _description_. Defaults to None.
+            frac (float, optional): _description_. Defaults to 0.15.
+
+        Returns:
+            pd.DataFrame: _description_
+        """    
+        
+        # step1 전처리
+
+        #1 : raw_LFC 구하기
+        df_snv_sum['raw_LFC'] = np.log2(((df_snv_sum.test + 1) / (df_snv_sum.control + 1)))
+        
+        #2 : position 정보 가져오기
+        df_snv_sum['var_pos'] = [id.split('pos')[-1][:-3] for id in df_snv_sum['SNV_var']]
+        
+        #3 : SNV mutation class (Nonsense / missense / Synonymous) label 추가하기 (reference info 필요)
+        list_mut_type = []
+        for aa_var in df_snv_sum['AA_var']:
+            if aa_var.endswith('Stop'): list_mut_type.append('Nonsense')
+            elif aa_var[0] == aa_var[-1]: list_mut_type.append('Synonymous')
+            else: list_mut_type.append('Missense')
+                
+        df_snv_sum['mut_type'] = list_mut_type
+
+        if exclude != None: 
+            for col_name in exclude:
+                df_snv_sum = df_snv_sum[df_snv_sum['mut_type']!=col_name]
+
+        # step2 : Lowess regression
+        df_syn = df_snv_sum[df_snv_sum['mut_type']=='Synonymous'].copy().reset_index(drop=True)
+
+        x = np.array(df_syn['var_pos'], dtype=np.int64)
+        y = np.array(df_syn['raw_LFC'], dtype=np.float64)
+
+        syn_std = np.std(df_syn['raw_LFC'])
+
+        lowess_model = lowess.Lowess()
+        lowess_model.fit(x, y, frac=frac)
+
+        x_pred = np.array([pos for pos in df_snv_sum['var_pos']], dtype=np.int64)
+        y_pred = lowess_model.predict(x_pred)
+
+
+        df_nor = df_snv_sum.copy()
+        df_nor[f'lws_reg'] = y_pred
+        df_nor[f'lws_LFC'] = (df_nor['raw_LFC'] - df_nor[f'lws_reg']) / syn_std
+
+        # return df_nor[['SNV_var', 'AA_var', 'mut_type', 'raw_LFC', 'lws_LFC']]
+        return df_nor
 
 
 class ReadPatternAnalyzer:
