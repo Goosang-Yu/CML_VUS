@@ -64,17 +64,19 @@ def read_statistics(var_sample:str, background:str) -> pd.DataFrame:
         pd.DataFrame: _description_
     """    
 
+
+    # Load DataFrame
+    df_UE = pd.read_csv(background)
+    df_sample = pd.read_csv(var_sample)
+
     ## Check var_sample과 backgound의 variants list가 완전히 동일한지 확인!
     if False in list(df_UE['RefSeq'] == df_sample['RefSeq']):
         raise ValueError('Not matched between sample and background. Please check your input files.')
-
-    # Step1: Unedit dictionary 만들기
-
-    df_UE = pd.read_csv(background)
     
     UE_WT_read  = df_UE[df_UE['Label']=='WT_refseq']['count'].iloc[0]
     UE_SynPE_df = df_UE[df_UE['Label']=='SynPE'].reset_index(drop=True)
 
+    # Step1: Unedit dictionary 만들기
     UE_SynPE_dict = {}
 
     for i in UE_SynPE_df.index:
@@ -86,7 +88,6 @@ def read_statistics(var_sample:str, background:str) -> pd.DataFrame:
     f_name = os.path.basename(var_sample).replace('.csv', '')
     print('Analysis:', f_name)
     
-    df_sample = pd.read_csv(var_sample)
     df_synpe  = df_sample[df_sample['Label']=='SynPE'].reset_index(drop=True).copy()
 
     total_cnt_wtseq = df_sample[df_sample['Label']=='WT_refseq']['count'].iloc[0]
