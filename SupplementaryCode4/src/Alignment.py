@@ -17,33 +17,33 @@ class ABL1VUS:
 
         self.info = self._exon_align_info(exon)
         
-        self.sample_id = sample_id
+        self.sample_id = sample_id.replace('.', '_')
         self.exon = exon
 
         self.refseq = self.info['refseq']
         self.center = self.info['center']
         self.window = self.info['window']
 
-        data    = f'-r1 {r1} -r2 {r2} -n {sample_id}'
+        data    = f'-r1 {r1} -r2 {r2} -n {self.sample_id}'
         align   = f'-a {self.refseq} -an {exon} -g {self.center} --plot_window_size {self.window}'
-        output  = f'--file_prefix {sample_id}'
+        output  = f'--file_prefix {self.sample_id}'
         
         self.command = f'CRISPResso {data} {align} {output}'
 
 
     def run(self, out_dir:str, save_plot:bool=False, remove_temp=True):
 
-        command  = self.command + f'-o {out_dir}'
+        command  = self.command + f' -o {out_dir}'
 
         if save_plot == False:
-            command = command + f'--suppress_plots --suppress_report'
+            command = command + f' --suppress_plots --suppress_report'
 
         # Run CRISPResso
         subprocess.run([command], shell=True, check=True)
 
         # Copy and rename frequency table
         file_from = f'{out_dir}/CRISPResso_on_{self.sample_id}/{self.sample_id}.{self.exon}.Alleles_frequency_table_around_sgRNA_{self.center}.txt'
-        file_to   = f'{out_dir}/NGS_frequency_table/alignd_{self.sample_id}.txt'
+        file_to   = f'{out_dir}/NGS_frequency_table/{self.sample_id}.txt'
 
         shutil.copyfile(file_from, file_to) 
 
@@ -120,4 +120,3 @@ class ABL1VUS:
         }
 
         return dict_abl1_info[exon]
-

@@ -45,7 +45,7 @@ def make_count_file(freq_table:str, var_ref:str) -> pd.DataFrame:
 
     df_out = df_ref.copy()
     df_out['count'] = list_count
-    
+
     total_cnt = df_out['count'].sum()
     df_out['frequency'] = [cnt/total_cnt for cnt in df_out['count']]
 
@@ -136,22 +136,34 @@ def read_statistics(var_control:str, background:str) -> pd.DataFrame:
     return df_synpe
 
 
-class VariantsLFC:
-    def __init__(self, sample:str, chemical:str, ):
-        """mageck test의 input file (mageck count) 형식에 맞춰서 정리된 파일을 만드는 함수.
+class VariantFilter:
+    def __init__(self, test_r1:str, test_r2:str, control_r1:str, control_r2:str):
+        """Odds ratio / p-value 기준으로 filtered test data를 만들어내는 함수.
         항상 replicate (2개의 실험군)있다는 가정으로 진행 됌 
 
         Args:
-            sample (str): _description_
-            chemical (str): _description_
+            test_r1 (str): Read count file, replicate 1
+            test_r2 (str): Read count file, replicate 2
+            control_r1 (str): Control statistics containing odds ratio and fisher's t-test p-value, replicate 1
+            control_r2 (str): Control statistics containing odds ratio and fisher's t-test p-value, replicate 2
+
+        Raises:
+            FileNotFoundError: Not proper input file path.
         """        
 
-        self.sample = sample
-        self.chemical = chemical
-        
+        try: 
+            self.df1_test = pd.read_csv(test_r1)
+            self.df2_test = pd.read_csv(test_r2)
+            
+            self.df1_control = pd.read_csv(control_r1)
+            self.df2_control = pd.read_csv(control_r2)
 
-    def calculate(self, OR_cutoff: float = 2, p_cutoff: float = 0.05, rpm_cutoff:float=10, lws_frac:float=0.15) -> pd.DataFrame:
-        """Odds ratio, fisher's t-test의 p-value를 계산해주고, 이를 기반으로 variants read를 filtering 해준다.
+        except:
+            raise FileNotFoundError('Not found statistics data. Please check your input.')
+
+
+    def filter(self, OR_cutoff: float = 2, p_cutoff: float = 0.05, rpm_cutoff:float=10) -> pd.DataFrame:
+        """Odds ratio, fisher's t-test의 p-value이 들어있는 Stats 파일을 input으로 받는다. 이를 기반으로 variants read를 filtering 해준다.
         그 후, synonymous mutation의 log 2-fold change (LFC)를 이용해서 LOWESS regression을 수행한다.
         LOWESS regression으로 LFC를 보정해준 normalized LFC를 계산해준 후, 이들의 정보를 담은 DataFrame을 반환한다.
 
@@ -164,11 +176,12 @@ class VariantsLFC:
             pd.DataFrame: _description_
         """    
 
-        df1_test = pd.read_csv(f'data/read_counts/Count_{self.sample}_Rep1_{self.chemical}.csv')
-        df2_test = pd.read_csv(f'data/read_counts/Count_{self.sample}_Rep2_{self.chemical}.csv')
+        df1_test = self.df1_test.copy()
+        df2_test = self.df2_test.copy()
         
-        df1_control = pd.read_csv(f'data/statistics/Stat_{self.sample}_Rep1_DMSO.csv')
-        df2_control = pd.read_csv(f'data/statistics/Stat_{self.sample}_Rep2_DMSO.csv')
+        df1_control = self.df1_control.copy()
+        df2_control = self.df2_control.copy()
+
 
         # Step1: OR / p-value cutoff를 넘는 sequence 중 R1/R2 에서 공통으로 나오면서 CDS의 변이를 유도하는 것만 골라낸다.
 
@@ -206,15 +219,10 @@ class VariantsLFC:
         df1_out = self._sum_SNV(df1_filtered)
         df2_out = self._sum_SNV(df2_filtered)
 
-
-        # Step4: Make LOWESS regression normalized DataFrame
-        df1_out = self._lws_normalized_LFC(df1_out, frac=lws_frac)
-        df2_out = self._lws_normalized_LFC(df2_out, frac=lws_frac)
-
         return df1_out, df2_out
     
 
-    def _sum_SNV(self, df:pd.DataFrame):
+    def _sum_SNV(self, df:pd.DataFrame) -> pd.DataFrame:
 
         df = df[['SNV_var', 'AA_var', 'control', 'test']].copy()
 
@@ -236,47 +244,59 @@ class VariantsLFC:
                 final_dict_test[SNV_var] = test
                 final_list_aavar.append(AA_var)
         
-        ndf = pd.DataFrame({'SNV_var':final_dict_ctrl.keys(), 
-                            'AA_var' : final_list_aavar,
-                            'control': final_dict_ctrl.values(), 
-                            'test'   : final_dict_test.values()})
+        df_normalized = pd.DataFrame({
+            'SNV_var':final_dict_ctrl.keys(), 
+            'AA_var' : final_list_aavar,
+            'control': final_dict_ctrl.values(), 
+            'test'   : final_dict_test.values(),
+            })
         
-        return ndf
+        return df_normalized
 
 
-    def _lws_normalized_LFC(self, df_snv_sum:pd.DataFrame, exclude = None, frac:float=0.15) -> pd.DataFrame:
+class Normalizer:
+    def __init__(self, ):
+
+        pass
+
+
+    def _make_variants_info(self, df:pd.DataFrame, control:str='control', test:str='test') -> pd.DataFrame:
+
+        df_out = df.copy()
+
+        #1 : raw_LFC 구하기
+        df_out['raw_LFC'] = np.log2(((df_out[test] + 1) / (df_out[control] + 1)))
+        
+        #2 : position 정보 가져오기
+        df_out['var_pos'] = [id.split('pos')[-1][:-3] for id in df_out['SNV_var']]
+        
+        #3 : SNV mutation class (Nonsense / missense / Synonymous) label 추가하기 (reference info 필요)
+        list_mut_type = []
+        for aa_var in df_out['AA_var']:
+            if   aa_var.endswith('Stop'): list_mut_type.append('Nonsense')
+            elif aa_var[0] == aa_var[-1]: list_mut_type.append('Synonymous')
+            else: list_mut_type.append('Missense')
+                
+        df_out['mut_type'] = list_mut_type
+
+        return df_out
+
+
+    def lowess(self, data:pd.DataFrame, frac:float=0.15, control:str='control', test:str='test') -> pd.DataFrame:
         """SNV sum count 파일에서 lowess normalization을 수행한 결과를 넣은 것
 
         Args:
-            df_snv_sum (pd.DataFrame): _description_
+            data (pd.DataFrame): _description_
             exclude (_type_, optional): _description_. Defaults to None.
             frac (float, optional): _description_. Defaults to 0.15.
 
         Returns:
             pd.DataFrame: _description_
-        """    
-        
-        # step1 전처리
+        """
 
-        #1 : raw_LFC 구하기
-        df_snv_sum['raw_LFC'] = np.log2(((df_snv_sum.test + 1) / (df_snv_sum.control + 1)))
+        df_snv_sum = data.copy()
+        df_snv_sum = self._make_variants_info(df_snv_sum, control, test)
         
-        #2 : position 정보 가져오기
-        df_snv_sum['var_pos'] = [id.split('pos')[-1][:-3] for id in df_snv_sum['SNV_var']]
-        
-        #3 : SNV mutation class (Nonsense / missense / Synonymous) label 추가하기 (reference info 필요)
-        list_mut_type = []
-        for aa_var in df_snv_sum['AA_var']:
-            if aa_var.endswith('Stop'): list_mut_type.append('Nonsense')
-            elif aa_var[0] == aa_var[-1]: list_mut_type.append('Synonymous')
-            else: list_mut_type.append('Missense')
-                
-        df_snv_sum['mut_type'] = list_mut_type
-
-        if exclude != None: 
-            for col_name in exclude:
-                df_snv_sum = df_snv_sum[df_snv_sum['mut_type']!=col_name]
-
         # step2 : Lowess regression
         df_syn = df_snv_sum[df_snv_sum['mut_type']=='Synonymous'].copy().reset_index(drop=True)
 
@@ -294,10 +314,118 @@ class VariantsLFC:
 
         df_nor = df_snv_sum.copy()
         df_nor[f'lws_reg'] = y_pred
-        df_nor[f'lws_LFC'] = (df_nor['raw_LFC'] - df_nor[f'lws_reg']) / syn_std
+        df_nor[f'normalized_LFC'] = (df_nor['raw_LFC'] - df_nor[f'lws_reg']) / syn_std
 
-        # return df_nor[['SNV_var', 'AA_var', 'mut_type', 'raw_LFC', 'lws_LFC']]
         return df_nor
+    
+    
+    def zscore(self, df:pd.DataFrame, control:str='control', test:str='test') -> pd.DataFrame:
+
+        df_nor = df.copy()
+        df_nor = self._make_variants_info(df_nor)
+
+        std = np.std(df_nor['raw_LFC'])
+        m   = np.mean(df_nor['raw_LFC'])
+
+        df_nor['normalized_LFC'] = [(df_nor.iloc[i]['raw_LFC']-m)/std for i in range(len(df_nor))]
+
+        return df_nor
+
+
+def combine_data(files:list) -> pd.DataFrame:
+    list_df = [pd.read_csv(file) for file in files]
+    return pd.concat(list_df, axis = 0).reset_index(drop=True)
+
+
+class VariantScore:
+    def __init__(self):
+
+
+        pass
+
+    def calculate(self, replicate_1:str, replicate_2:str, var_type:str='SNV', sensitive_cutoff:int=0.95, resistant_cutoff:int=0.997) -> pd.DataFrame:
+        """Adjusted LFC 또는 Resistance score를 구해주는 method. Replicate 2개의 파일 경로를 입력받아야 한다. 
+        `var_type`을 SNV 또는 AA로 선택해서 Adjusted LFC를 계산할지, resistance score를 계산할지 선택할 수 있다. 
+        계산된 score에 맞춰서 자동으로 drug response classification을 해준다.
+
+        Args:
+            replicate_1 (str): _description_
+            replicate_2 (str): _description_
+            var_type (str, optional): SNV 또는 AA 중에 선택할 수 있다. Defaults to 'SNV'.
+            sensitive_cutoff (int, optional): Sensitive-Intermediate 구분에 사용되는 synonymous score cut-off. Defaults to 0.95.
+            resistant_cutoff (int, optional): Resistant-Intermediate 구분에 사용되는 synonymous score cut-off. Defaults to 0.997.
+
+        Raises:
+            ValueError: `var_type`을 잘못된 값을 넣었을 때 발생.
+
+        Returns:
+            pd.DataFrame: _description_
+        """        
+
+        self.sens_cutoff = sensitive_cutoff
+        self.res_cutoff  = resistant_cutoff
+
+        if var_type == 'SNV':
+            df_out  = self._get_adjusted_lfc(replicate_1, replicate_2)
+        elif var_type == 'AA':
+            df_out  = self._get_adjusted_lfc(replicate_1, replicate_2)
+            df_out = self._get_resistance_score(df_out)
+        else:
+            raise ValueError('Not available variants type. Please select "SNV" or "AA".')
+        
+        return df_out
+
+
+    def _get_adjusted_lfc(self, replicate_1:str, replicate_2:str):
+
+        df1  = pd.read_csv(replicate_1).set_index('SNV_var').rename(columns={'normalized_LFC': 'nLFC_1'})
+        df2  = pd.read_csv(replicate_2).set_index('SNV_var').rename(columns={'normalized_LFC': 'nLFC_2'})['nLFC_2']
+
+        df_merge = pd.concat([df1, df2], axis=1)
+        df_merge['Adjusted_LFC'] = df_merge[['nLFC_1', 'nLFC_2']].mean(axis=1) # merge 끝
+
+        df_merge = self._classification(df_merge)
+
+        return df_merge
+    
+    def _get_resistance_score(self, df_adjLFC:pd.DataFrame):
+
+        df = df_adjLFC.copy()
+
+        dict_mut_type = {}
+        for idx in df.index:
+            data = df.loc[idx]
+            dict_mut_type[data['AA_var']] = data['mut_type']
+
+        aa_df = df.groupby('AA_var').mean(numeric_only=True)[['nLFC_1', 'nLFC_2']]
+        
+        aa_df['Resistance_score'] = aa_df.mean(axis = 1)
+        aa_df['mut_type'] = [dict_mut_type[AA_var] for AA_var in aa_df.index]
+
+        aa_df = self._classification(aa_df)
+
+        return aa_df
+    
+
+    def _classification(self, df:pd.DataFrame) -> pd.DataFrame:
+        # LFC 구하는 pipeline에 아예 classification도 추가되도록 넣어버리기
+        synonymous_df = df[df['mut_type']=='Synonymous'].copy()
+        resistant_1  = synonymous_df['nLFC_1'].quantile(self.res_cutoff)
+        resistant_2  = synonymous_df['nLFC_2'].quantile(self.res_cutoff)
+        senseitive_1 = synonymous_df['nLFC_1'].quantile(self.sens_cutoff)
+        senseitive_2 = synonymous_df['nLFC_2'].quantile(self.sens_cutoff)
+
+        def label(row):
+            if row['nLFC_1'] > resistant_1 and row['nLFC_2'] > resistant_2:
+                return 'Resistant'
+            elif row['nLFC_1'] < senseitive_1 and row['nLFC_2'] < senseitive_2 :
+                return 'Sensitive'
+            else:
+                return 'Intermediate'
+            
+        df['Classification'] = df.apply(label, axis = 1)
+
+        return df
 
 
 class ReadPatternAnalyzer:
