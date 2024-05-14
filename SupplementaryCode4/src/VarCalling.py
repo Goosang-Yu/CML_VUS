@@ -45,6 +45,9 @@ def make_count_file(freq_table:str, var_ref:str) -> pd.DataFrame:
 
     df_out = df_ref.copy()
     df_out['count'] = list_count
+    
+    total_cnt = df_out['count'].sum()
+    df_out['frequency'] = [cnt/total_cnt for cnt in df_out['count']]
 
     return df_out
 
