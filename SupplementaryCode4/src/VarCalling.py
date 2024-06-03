@@ -53,7 +53,7 @@ def make_count_file(freq_table:str, var_ref:str) -> pd.DataFrame:
 
 
 
-def read_statistics(var_control:str, background:str) -> pd.DataFrame:
+def read_statistics(var_control:str, background:str, hit_label:str='SynPE', adjustment:str='bonferroni') -> pd.DataFrame:
     """_summary_
 
     Args:
@@ -77,7 +77,7 @@ def read_statistics(var_control:str, background:str) -> pd.DataFrame:
         raise ValueError('Not matched between sample and background. Please check your input files.')
     
     UE_WT_read  = df_UE[df_UE['Label']=='WT_refseq']['count'].iloc[0]
-    UE_SynPE_df = df_UE[df_UE['Label']=='SynPE'].reset_index(drop=True)
+    UE_SynPE_df = df_UE[df_UE['Label']==hit_label].reset_index(drop=True)
 
     # Step1: Unedit dictionary 만들기
     UE_SynPE_dict = {}
@@ -91,7 +91,7 @@ def read_statistics(var_control:str, background:str) -> pd.DataFrame:
     f_name = os.path.basename(var_control).replace('.csv', '')
     print('Analysis:', f_name)
     
-    df_synpe  = df_test[df_test['Label']=='SynPE'].reset_index(drop=True).copy()
+    df_synpe  = df_test[df_test['Label']==hit_label].reset_index(drop=True).copy()
 
     total_cnt_wtseq = df_test[df_test['Label']=='WT_refseq']['count'].iloc[0]
     total_cnt_edseq = df_synpe['count'].sum()
@@ -133,6 +133,9 @@ def read_statistics(var_control:str, background:str) -> pd.DataFrame:
     df_synpe['OR']              = list_odds_ratio
     df_synpe['pvalue']          = list_pvalue
 
+    if adjustment == 'bonferroni':
+        df_synpe['adj_pvalue'] = [len(df_synpe)*pv for pv in list_pvalue]
+
     return df_synpe
 
 
@@ -162,19 +165,21 @@ class VariantFilter:
             raise FileNotFoundError('Not found statistics data. Please check your input.')
 
 
-    def filter(self, OR_cutoff: float = 2, p_cutoff: float = 0.05, rpm_cutoff:float=10) -> pd.DataFrame:
+    def filter(self, hit_label:str='SynPE', OR_cutoff: float = 2, p_cutoff: float = 0.05, p_column:str='adj_pvalue', rpm_cutoff:float=10) -> pd.DataFrame:
         """Odds ratio, fisher's t-test의 p-value이 들어있는 Stats 파일을 input으로 받는다. 이를 기반으로 variants read를 filtering 해준다.
         그 후, synonymous mutation의 log 2-fold change (LFC)를 이용해서 LOWESS regression을 수행한다.
         LOWESS regression으로 LFC를 보정해준 normalized LFC를 계산해준 후, 이들의 정보를 담은 DataFrame을 반환한다.
 
         Args:
+            hit_label (str, optional): _description_. Defaults to 'SynPE'.
             OR_cutoff (float, optional): _description_. Defaults to 2.
             p_cutoff (float, optional): _description_. Defaults to 0.05.
-            lws_frac (float, optional): _description_. Defaults to 0.15.
+            p_column (str, optional): _description_. Defaults to 'adj_pvalue'.
+            rpm_cutoff (float, optional): _description_. Defaults to 10.
 
         Returns:
             pd.DataFrame: _description_
-        """    
+        """        
 
         df1_test = self.df1_test.copy()
         df2_test = self.df2_test.copy()
@@ -185,8 +190,8 @@ class VariantFilter:
 
         # Step1: OR / p-value cutoff를 넘는 sequence 중 R1/R2 에서 공통으로 나오면서 CDS의 변이를 유도하는 것만 골라낸다.
 
-        df1_filtered = df1_control[(df1_control['OR']>OR_cutoff) & (df1_control['pvalue']<p_cutoff) & (df1_control['RPM']>=rpm_cutoff)].copy()
-        df2_filtered = df2_control[(df2_control['OR']>OR_cutoff) & (df2_control['pvalue']<p_cutoff) & (df2_control['RPM']>=rpm_cutoff)].copy()
+        df1_filtered = df1_control[(df1_control['OR']>OR_cutoff) & (df1_control[p_column]<p_cutoff) & (df1_control['RPM']>=rpm_cutoff)].copy()
+        df2_filtered = df2_control[(df2_control['OR']>OR_cutoff) & (df2_control[p_column]<p_cutoff) & (df2_control['RPM']>=rpm_cutoff)].copy()
 
         # Rep1, Rep2 교집합으로 filtering 통과한 것들만 나오게 함
         filtered_RefSeq = list(set(df1_filtered['RefSeq']) & set(df2_filtered['RefSeq']))
@@ -202,13 +207,13 @@ class VariantFilter:
 
 
         # Step2: Cutoff를 통과한 sequence들에 대해서만 read count를 가져오고, mageck count file 형태로 만든다. 
-        df1_test_Syn = df1_test[df1_test['Label']=='SynPE'].copy()
+        df1_test_Syn = df1_test[df1_test['Label']==hit_label].copy()
         df1_test_Syn['RPM'] = df1_test_Syn['count'] * 1000000 / np.sum(df1_test_Syn['count'])
         df1_test_dict = dict(zip(df1_test_Syn['RefSeq'], df1_test_Syn['RPM']))
         df1_filtered['test'] = [df1_test_dict.get(i) for i in df1_filtered['RefSeq']]
         df1_filtered.dropna(axis = 0, inplace=True)
 
-        df2_test_Syn = df2_test[df2_test['Label']=='SynPE'].copy()
+        df2_test_Syn = df2_test[df2_test['Label']==hit_label].copy()
         df2_test_Syn['RPM'] = df2_test_Syn['count'] * 1000000 / np.sum(df2_test_Syn['count'])
         df2_test_dict = dict(zip(df2_test_Syn['RefSeq'], df2_test_Syn['RPM']))
         df2_filtered['test'] = [df2_test_dict.get(i) for i in df2_filtered['RefSeq']]
@@ -378,8 +383,11 @@ class VariantScore:
 
     def _get_adjusted_lfc(self, replicate_1:str, replicate_2:str):
 
-        df1  = pd.read_csv(replicate_1).set_index('SNV_var').rename(columns={'normalized_LFC': 'nLFC_1'})
-        df2  = pd.read_csv(replicate_2).set_index('SNV_var').rename(columns={'normalized_LFC': 'nLFC_2'})['nLFC_2']
+        df1  = pd.read_csv(replicate_1).set_index('SNV_var').rename(
+            columns={'raw_LFC': 'raw_LFC_1', 'normalized_LFC': 'nLFC_1'})
+        
+        df2  = pd.read_csv(replicate_2).set_index('SNV_var').rename(
+            columns={'raw_LFC': 'raw_LFC_2', 'normalized_LFC': 'nLFC_2'})[['raw_LFC_2', 'nLFC_2']]
 
         df_merge = pd.concat([df1, df2], axis=1)
         df_merge['Adjusted_LFC'] = df_merge[['nLFC_1', 'nLFC_2']].mean(axis=1) # merge 끝
@@ -397,9 +405,9 @@ class VariantScore:
             data = df.loc[idx]
             dict_mut_type[data['AA_var']] = data['mut_type']
 
-        aa_df = df.groupby('AA_var').mean(numeric_only=True)[['nLFC_1', 'nLFC_2']]
+        aa_df = df.groupby('AA_var').mean(numeric_only=True)[['raw_LFC_1', 'raw_LFC_2', 'nLFC_1', 'nLFC_2']]
         
-        aa_df['Resistance_score'] = aa_df.mean(axis = 1)
+        aa_df['Resistance_score'] = aa_df[['nLFC_1', 'nLFC_2']].mean(axis = 1)
         aa_df['mut_type'] = [dict_mut_type[AA_var] for AA_var in aa_df.index]
 
         aa_df = self._classification(aa_df)
