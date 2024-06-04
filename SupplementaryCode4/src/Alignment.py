@@ -9,9 +9,9 @@ import shutil
 
 class ABL1VUS:
     def __init__(self, sample_id:str, r1, r2, exon:str):
-        '''CML VUS screening에서 ABL1의 variants counting을 위한 함수
-        CRISPResso를 이용한 counting을 하고, 그 output을 이용해 variants list별로 정리된 
-        output 파일을 생성한다. '''
+        '''A function for counting variants of ABL1 in CML VUS screening.
+        Counting is done using CRISPResso, and based on its output, 
+        output files are generated sorted by variant lists. '''
         
         self._check_input(exon)
 
@@ -61,9 +61,8 @@ class ABL1VUS:
     
 
     def _exon_align_info(self, exon):
-        # Refseq을 인식해서 center sequence를 자동으로 만들고, 그 주위로 window 길이도 정해주게 만들 수 있을듯. 
-        # 코드 구현이 되면 ABL1으로만 제한되지 않고, refseq을 input으로 받아서 모든 종류의 gene에 대해 사용할 수 있는 함수가 된다. 
-        # Reference 정보 정리하면서 코드 수정해보기 
+        # It seems feasible to automatically generate a center sequence by recognizing RefSeq and allowing the specification of window length around it.
+        # Once implemented, the code won't be restricted to ABL1 only; it could become a function that accepts RefSeq as input and can be used for all types of genes.
 
         dict_abl1_info = {
 

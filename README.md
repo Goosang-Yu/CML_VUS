@@ -7,7 +7,7 @@ This code is for designing the library for pegRNA abundance-based CML VUS screen
 
 
 ### SuppleCode2: epegRNA abundance screening analysis  
-This code was used to preprocess and analyze the data obtained from pegRNA abundance-based CML VUS screening. After preprocessing the raw FASTQ files uploaded to SRA to keep only the parts to be analyzed, read counts for each barcode sequence were counted, and UMI clustering was performed to organize the read counts for each variant. The variant-specific read counts obtained were analyzed using the MAGeCK pipeline.
+This code was used to preprocess and analyze the data obtained from pegRNA abundance-based CML VUS screening. After preprocessing the raw FASTQ files uploaded to SRA to keep only the parts to be analyzed, read counts for each barcode sequence were counted, and UMI clustering was performed to organize the read counts for each variant. The variant-specific read counts obtained were analyzed using the [MAGeCK](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-014-0554-4) pipeline.
 
 ### SuppleCode3: SynPrime library design  
 This code is for designing the library for SynPrime-based CML VUS screening.
@@ -28,7 +28,7 @@ These codes were tested in Ubuntu 22.04 LTS or CentOS 7 environments.
 
 
 # Requirements
-- Python > 3.6
+- Python >= 3.7
 - biopython
 - pandas
 - genet
